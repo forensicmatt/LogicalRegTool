@@ -6,7 +6,7 @@ from lib import EnumHandlers as Eh
 from lib.plugins.PluginManager import PluginManager
 
 logging.basicConfig(
-    level=logging.INFO
+    level=logging.DEBUG
 )
 
 
@@ -46,8 +46,6 @@ def main():
     enumerator.load_registry_files()
 
     pm.run_plugins(reg_manager)
-
-    pass
 
 
 if __name__ == "__main__":

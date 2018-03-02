@@ -33,6 +33,7 @@ class RegistryIterator(object):
                     value_data = value_data.decode(u'ascii', errors=u'replace')
 
                 record = OrderedDict([
+                    (u"plugin", u"RegistryIterator"),
                     (u"full_path", u"\\".join([full_path, value_name])),
                     (u"value_name", value_name),
                     (u"data_type", data_type_str),
@@ -54,6 +55,7 @@ class RegistryIterator(object):
                 value_data = value_data.decode(u'ascii', errors=u'replace')
 
             record = OrderedDict([
+                (u"plugin", u"RegistryIterator"),
                 (u"full_path", u"\\".join([full_path, value_name])),
                 (u"value_name", value_name),
                 (u"data_type", data_type_str),
