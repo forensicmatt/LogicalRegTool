@@ -3,6 +3,7 @@ from collections import OrderedDict
 from lib.Helpers import get_datetime_64
 from lib.JsonDecoder import ComplexEncoder
 
+
 APP_COMPAT_FLAGS_PERSISTED = [
     u"Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Compatibility Assistant\\Persisted",
     u"Wow6432Node\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Compatibility Assistant\\Persisted",

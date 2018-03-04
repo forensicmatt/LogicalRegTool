@@ -6,12 +6,13 @@ from lib import EnumHandlers as Eh
 from lib.plugins.PluginManager import PluginManager
 
 logging.basicConfig(
-    level=logging.DEBUG
+    level=logging.INFO
 )
 
 
 def get_arguments():
-    usage = '''Process a logical volume.'''
+    usage = '''Process registry files from a logical volume. The output is in JSONL format. 
+    This tool requires Admin privlages to open the Logical Volume.'''
 
     arguments = argparse.ArgumentParser(
         description=(usage)
