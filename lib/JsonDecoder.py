@@ -1,7 +1,7 @@
 import json
 import datetime
 
-DATETIME_FORMAT = u'{0.month:02d}/{0.day:02d}/{0.year:04d} '\
+DATETIME_FORMAT = u'{0.year:04d}-{0.month:02d}-{0.day:02d} '\
     u'{0.hour:02d}:{0.minute:02d}:{0.second:02d}'
 
 
