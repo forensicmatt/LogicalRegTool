@@ -2,6 +2,7 @@ from lib.plugins.RegistryIterator import RegistryIterator
 from lib.plugins.UsbEnumerator import UsbEnumerator
 from lib.plugins.UserAssist import UserAssist
 from lib.plugins.AppCompat import AppCompact
+from lib.plugins.Bam import Bam
 
 
 class PluginManager(object):
@@ -10,6 +11,7 @@ class PluginManager(object):
             # RegistryIterator(),
             UserAssist(),
             AppCompact(),
+            Bam(),
             # UsbEnumerator()
         ]
 
