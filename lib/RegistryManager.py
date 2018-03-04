@@ -3,6 +3,21 @@ import logging
 from yarp import Registry
 
 
+class SystemHelper(object):
+    def __init__(self, handler):
+        self._handler = handler
+
+    def get_current_control_set_path(self):
+        hive = self._handler.get_hive()
+        select_key = hive.find_key(u'Select')
+        if select_key:
+            current_value = select_key.value(name=u"Current")
+            current_path = u"ControlSet{:03d}".format(current_value.data())
+            return current_path
+        else:
+            raise Exception(u"Cannot find 'Select' key in SOFTWARE hive.")
+
+
 class RegistryHandler(object):
     def __init__(self, registry_name, fullname, tsk_file_io):
         self.registry_name = registry_name
@@ -51,6 +66,12 @@ class RegistryHandler(object):
             logging.error(u"{}".format(error))
 
         return hive
+
+    def get_helper(self):
+        if self.registry_name.upper() == u"SYSTEM":
+            return SystemHelper(self)
+        else:
+            raise Exception(u"No Helper for registry {}".format(self.registry_name))
 
 
 class RegistryManager(object):
