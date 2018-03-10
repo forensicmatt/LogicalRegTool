@@ -1,4 +1,5 @@
 import json
+import logging
 from collections import OrderedDict
 from lib.Helpers import get_datetime_64
 from lib.JsonDecoder import ComplexEncoder
@@ -29,20 +30,69 @@ class AppCompact(object):
 
             for location_path in APP_COMPAT_FLAGS_STORE:
                 store_key = hive.find_key(location_path)
+
                 if store_key is not None:
-                    for value in store_key.values():
-                        value_name = value.name()
-                        value_data = value.data()
+                    self.process_key_values(
+                        location_path,
+                        store_key
+                    )
 
-                        timestamp = get_datetime_64(
-                            value_data[44:52]
-                        )
+    def process_key_values(self, location_path, key):
+        """Iterate values of the given key.
+        """
+        key_values = iter(key.values())
+        remnant_values = iter(key.remnant_values())
 
-                        record = OrderedDict([
-                            ("plugin", u"AppCompat"),
-                            ("name", value_name),
-                            ("timestamp", timestamp),
-                            ("path", location_path)
-                        ])
+        while True:
+            try:
+                value = next(key_values)
+            except StopIteration:
+                break
+            except Exception as error:
+                logging.error(u"Error getting next value: {}".format(error))
+                continue
 
-                        print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
+            value_name = value.name()
+            value_data = value.data_raw()
+
+            timestamp = get_datetime_64(
+                value_data[44:52]
+            )
+
+            record = OrderedDict([
+                ("plugin", u"AppCompat"),
+                ("name", value_name),
+                ("timestamp", timestamp),
+                ("path", location_path),
+                ("deleted_flag", False)
+            ])
+
+            print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
+
+        while True:
+            try:
+                value = next(remnant_values)
+            except StopIteration:
+                break
+            except Exception as error:
+                logging.error(u"Error getting next value: {}".format(error))
+                continue
+
+            value_name = value.name()
+            value_data = value.data_raw()
+
+            timestamp = None
+            if len(value_data) > 52:
+                timestamp = get_datetime_64(
+                    value_data[44:52]
+                )
+
+            record = OrderedDict([
+                ("plugin", u"AppCompat"),
+                ("name", value_name),
+                ("timestamp", timestamp),
+                ("path", location_path),
+                ("deleted_flag", True)
+            ])
+
+            print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
