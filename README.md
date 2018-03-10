@@ -1,6 +1,8 @@
 # LogicalRegTool
 A registry tool that can be ran on a logical volume. JSONL output for NoSQL.
 
+Python 3.6 Required.
+
 # Usage
 ```
 usage: LogicalRegTool.py [-h] -s SOURCE
