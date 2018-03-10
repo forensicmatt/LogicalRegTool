@@ -1,4 +1,5 @@
 import re
+import os
 import pytsk3
 import logging
 from lib.TskFileIo import TskFileIo
@@ -10,18 +11,27 @@ USRCLASS_DIR_TEMPLATE = u"./{}/{}/AppData/Local/Microsoft/Windows"
 NTUSER_DIR_TEMPLATE = u"./{}/{}"
 
 
+def get_temp_dir(temp_base, registry, inode, user=None):
+    temp_dir = u"{}.{}".format(registry, inode)
+
+    if user:
+        temp_dir = u"{}_{}".format(user, temp_dir)
+
+    temp_dir = os.path.join(temp_base, temp_dir)
+    return temp_dir
+
+
 class LogicalEnumerator(object):
     """A class to process the logical volume."""
-    def __init__(self, img_info, registry_manager):
+    def __init__(self, temp_dir, img_info, registry_manager):
         """Create LogicalEnumerator
 
         Params:
-            file_io (FileIO): I file like object representing a volume.
-            handler_mapping (ArtifactMapping): The artifact mapping that determines file operations
-            arango_handler (ArangoHandler): The handler for inserting documents into ArangoDB
-            temp_dir (unicode): The location to extract files to
-            description (unicode): The label for this LogicalEnumerator
+            temp_dir (unicode): the location of the temp dir.
+            img_info (FileIO): a file like object representing a volume.
+            registry_manager (RegistryManager): class managing operations for multiple registries
         """
+        self.temp_dir = temp_dir
         self.img_info = img_info
         self.fs_info = pytsk3.FS_Info(
             self.img_info
@@ -57,7 +67,7 @@ class LogicalEnumerator(object):
                 # Check if this folder is a dir
                 if tsk_file.info.meta is not None:
                     if tsk_file.info.meta.type == pytsk3.TSK_FS_META_TYPE_DIR:
-                        filename = unicode(tsk_file.info.name.name)
+                        filename = tsk_file.info.name.name.decode(u"utf-8")
                         if filename in [u'.', u'..']:
                             continue
 
@@ -75,7 +85,7 @@ class LogicalEnumerator(object):
                 dir_mapping = {}
 
                 for tsk_file in ntuser_dir:
-                    filename = tsk_file.info.name.name
+                    filename = tsk_file.info.name.name.decode(u"utf-8")
                     logging.debug(u"Filename: {}".format(filename))
                     dir_mapping[filename] = {
                         'fullname': u"/".join([ntuser_path, filename]),
@@ -84,14 +94,24 @@ class LogicalEnumerator(object):
                     }
 
                 for key in dir_mapping.keys():
+                    tsk_file = dir_mapping[key]['tsk_file']
+                    inode = None
+                    if tsk_file.info.meta:
+                        inode = tsk_file.info.meta.addr
+                    else:
+                        continue
+
                     if re.search('^NTUSER.DAT$', key, flags=re.I):
+                        temp_dir = get_temp_dir(
+                            self.temp_dir, u'NTUSER.DAT', inode,
+                            user=user_name
+                        )
+
                         handler = RegistryHandler(
                             u'NTUSER.DAT',
-                            dir_mapping[key]['fullname'],
-                            TskFileIo(dir_mapping[key]['tsk_file'])
-                        )
-                        handler.enumerate_log_files(
-                            dir_mapping
+                            key,
+                            dir_mapping,
+                            temp_dir
                         )
                         self.registry_manager.add_registry(
                             handler
@@ -107,7 +127,7 @@ class LogicalEnumerator(object):
                 dir_mapping = {}
 
                 for tsk_file in usrclass_dir:
-                    filename = tsk_file.info.name.name
+                    filename = tsk_file.info.name.name.decode(u"utf-8")
                     logging.debug(u"Filename: {}".format(filename))
                     dir_mapping[filename] = {
                         'fullname': u"/".join([usrclass_path, filename]),
@@ -116,14 +136,24 @@ class LogicalEnumerator(object):
                     }
 
                 for key in dir_mapping.keys():
+                    tsk_file = dir_mapping[key]['tsk_file']
+                    inode = None
+                    if tsk_file.info.meta:
+                        inode = tsk_file.info.meta.addr
+                    else:
+                        continue
+
                     if re.search('^UsrClass.Dat$', key, flags=re.I):
+                        temp_dir = get_temp_dir(
+                            self.temp_dir, u'UsrClass.Dat', inode,
+                            user=user_name
+                        )
+
                         handler = RegistryHandler(
                             u'UsrClass.Dat',
-                            dir_mapping[key]['fullname'],
-                            TskFileIo(dir_mapping[key]['tsk_file'])
-                        )
-                        handler.enumerate_log_files(
-                            dir_mapping
+                            key,
+                            dir_mapping,
+                            temp_dir
                         )
                         self.registry_manager.add_registry(
                             handler
@@ -134,60 +164,78 @@ class LogicalEnumerator(object):
         dir_mapping = {}
 
         for tsk_file in system_config_dir:
-            filename = tsk_file.info.name.name
+            filename = tsk_file.info.name.name.decode(u"utf-8")
             logging.debug(u"Filename: {}".format(filename))
             dir_mapping[filename] = {
                 'fullname': u"/".join([u"./Windows/System32/config", filename]),
-                'tsk_file': tsk_file,
-                'file_io': TskFileIo(tsk_file)
+                'tsk_file': tsk_file
             }
 
         for key in dir_mapping.keys():
+            tsk_file = dir_mapping[key]['tsk_file']
+            inode = None
+            if tsk_file.info.meta:
+                inode = tsk_file.info.meta.addr
+            else:
+                continue
+
             if re.search('^SYSTEM$', key, flags=re.I):
+                temp_dir = get_temp_dir(
+                    self.temp_dir, u'SYSTEM', inode
+                )
+
                 handler = RegistryHandler(
                     u'SYSTEM',
-                    dir_mapping[key]['fullname'],
-                    TskFileIo(dir_mapping[key]['tsk_file'])
-                )
-                handler.enumerate_log_files(
-                    dir_mapping
+                    key,
+                    dir_mapping,
+                    temp_dir
                 )
                 self.registry_manager.add_registry(
                     handler
                 )
             elif re.search('^SOFTWARE$', key, flags=re.I):
+                temp_dir = get_temp_dir(
+                    self.temp_dir, u'SOFTWARE', inode
+                )
+
                 handler = RegistryHandler(
                     u'SOFTWARE',
-                    dir_mapping[key]['fullname'],
-                    TskFileIo(dir_mapping[key]['tsk_file'])
-                )
-                handler.enumerate_log_files(
-                    dir_mapping
+                    key,
+                    dir_mapping,
+                    temp_dir
                 )
                 self.registry_manager.add_registry(
                     handler
                 )
             elif re.search('^SECURITY$', key, flags=re.I):
+                temp_dir = get_temp_dir(
+                    self.temp_dir, u'SECURITY', inode
+                )
+
                 handler = RegistryHandler(
                     u'SECURITY',
-                    dir_mapping[key]['fullname'],
-                    TskFileIo(dir_mapping[key]['tsk_file'])
-                )
-                handler.enumerate_log_files(
-                    dir_mapping
+                    key,
+                    dir_mapping,
+                    temp_dir
                 )
                 self.registry_manager.add_registry(
                     handler
                 )
             elif re.search('^SAM$', key, flags=re.I):
+                temp_dir = get_temp_dir(
+                    self.temp_dir, u'SAM', inode
+                )
+
                 handler = RegistryHandler(
                     u'SAM',
-                    dir_mapping[key]['fullname'],
-                    TskFileIo(dir_mapping[key]['tsk_file'])
-                )
-                handler.enumerate_log_files(
-                    dir_mapping
+                    key,
+                    dir_mapping,
+                    temp_dir
                 )
                 self.registry_manager.add_registry(
                     handler
                 )
+
+    def __del__(self):
+        logging.debug(u"LogicalEnumerator.__del__")
+

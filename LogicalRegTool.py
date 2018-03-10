@@ -6,7 +6,7 @@ from lib import EnumHandlers as Eh
 from lib.plugins.PluginManager import PluginManager
 
 logging.basicConfig(
-    level=logging.INFO
+    level=logging.DEBUG
 )
 
 
@@ -22,8 +22,14 @@ def get_arguments():
         dest="source",
         action="store",
         required=True,
-        type=unicode,
         help=u"Logical source [Example: \\\\.\\C:]"
+    )
+    arguments.add_argument(
+        "-t", "--temp_dir",
+        dest="temp_dir",
+        action="store",
+        required=True,
+        help=u"TEMP_DIR (Make sure this is on a volume that can handle large files.)"
     )
 
     return arguments
@@ -40,7 +46,9 @@ def main():
     pm = PluginManager()
 
     reg_manager = Rm.RegistryManager()
+
     enumerator = Eh.LogicalEnumerator(
+        options.temp_dir,
         tsk_img,
         reg_manager
     )

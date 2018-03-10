@@ -1,6 +1,9 @@
 import re
+import os
 import logging
 from yarp import Registry
+from yarp import RegistrySqlite
+from lib.Helpers import extract_tsk_file_temp
 
 
 class SystemHelper(object):
@@ -19,47 +22,83 @@ class SystemHelper(object):
 
 
 class RegistryHandler(object):
-    def __init__(self, registry_name, fullname, tsk_file_io):
+    def __init__(self, registry_name, name_key, mapping, temp_dir):
         self.registry_name = registry_name
-        self.fullname = fullname
-        self.tsk_file_io = tsk_file_io
+        self.orig_name = name_key
+        self.orig_filename = mapping[name_key]['fullname']
+        self.temp_dir = temp_dir
+        self.sqlite_hive = os.path.join(self.temp_dir, u"{}.db".format(self.registry_name))
+        self.primary_registry = os.path.join(self.temp_dir, name_key)
+
         self.log_files = {
-            u'1': {},
-            u'2': {},
-            u'3': {}
+            u'LOG': None,
+            u'LOG1': None,
+            u'LOG2': None
         }
 
-    def enumerate_log_files(self, mapping):
+        logging.debug(u"[starting] Processing: {} and logfiles.".format(self.orig_filename))
+
+        # Insure temp dir
+        os.makedirs(self.temp_dir, exist_ok=True)
+
+        # extract main hive
+        export_file_io = open(self.primary_registry, 'wb')
+        extract_tsk_file_temp(mapping[name_key], export_file_io)
+
         file_list = mapping.keys()
         for key in sorted(file_list):
-            match = re.search('^{}[.]LOG(\d)$'.format(self.registry_name), key, flags=re.I)
+            match = re.search('^{}[.](LOG\d?)$'.format(self.registry_name), key, flags=re.I)
             if match:
-                number = unicode(match.group(1))
-                self.log_files[number] = mapping[key]
+                filename = match.group(0)
+                export_fullpath = os.path.join(self.temp_dir, filename)
+                export_file_io = open(export_fullpath, 'wb')
 
-    def get_hive_new(self):
-        hive = Registry.RegistryHive(self.tsk_file_io)
+                # Extract the source file to the temp file
+                extract_tsk_file_temp(mapping[key], export_file_io)
 
-        log_1 = self.log_files[u'1'].get(u'file_io', None)
-        if log_1:
-            log_2 = self.log_files[u'2'].get(u'file_io', None)
-            hive.recover_new(
-                log_1 , file_object_log2=log_2
-            )
-            return hive
+                log = match.group(1)
+                self.log_files[log] = export_fullpath
 
-        return None
+        hive = RegistrySqlite.YarpDB(
+            self.primary_registry,
+            self.sqlite_hive
+        )
+        hive.close()
+
+        logging.debug(u"[finished] Processing: {}".format(self.orig_filename))
+
+    def get_sqlite_hive(self):
+        hive = RegistrySqlite.YarpDB(
+            None,
+            self.sqlite_hive
+        )
+        return hive
 
     def get_hive(self):
-        hive = Registry.RegistryHive(self.tsk_file_io)
+        hive = Registry.RegistryHive(
+            open(self.primary_registry, 'rb')
+        )
+
         try:
-            log_1 = self.log_files[u'1'].get(u'file_io', None)
-            log_2 = self.log_files[u'2'].get(u'file_io', None)
-            log_3 = self.log_files[u'3'].get(u'file_io', None)
+            if self.log_files[u'LOG']:
+                log_1 = open(self.log_files[u'LOG'], 'rb')
+            else:
+                log_1 = None
+
+            if self.log_files[u'LOG1']:
+                log_2 = open(self.log_files[u'LOG1'], 'rb')
+            else:
+                log_2 = None
+
+            if self.log_files[u'LOG2']:
+                log_3 = open(self.log_files[u'LOG2'], 'rb')
+            else:
+                log_3 = None
+
             recovery_result = hive.recover_auto(
-                None,
                 log_1,
-                log_2
+                log_2,
+                log_3
             )
             logging.info(u"Recovery Results: {}".format(recovery_result))
         except Exception as error:
@@ -72,6 +111,10 @@ class RegistryHandler(object):
             return SystemHelper(self)
         else:
             raise Exception(u"No Helper for registry {}".format(self.registry_name))
+
+    def __del__(self):
+        logging.debug(u"RegistryHandler.__del__")
+        # os.rmdir(self.temp_dir)
 
 
 class RegistryManager(object):
