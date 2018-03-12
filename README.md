@@ -1,8 +1,6 @@
 # LogicalRegTool
 A registry tool that can be ran on a logical volume. JSONL output for NoSQL.
 
-Python 3.6 Required.
-
 This tool utilizes the yarp (Yet Another Registry Parser) library. Special thanks to Maxim Suhanov. https://github.com/msuhanov/yarp
 
 
