@@ -12,7 +12,7 @@ class PluginManager(object):
             UserAssist(),
             AppCompact(),
             Bam(),
-            # UsbEnumerator()
+            UsbEnumerator()
         ]
 
     def run_plugins(self, registry_manager):

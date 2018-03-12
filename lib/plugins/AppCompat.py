@@ -32,12 +32,12 @@ class AppCompact(object):
                 store_key = hive.find_key(location_path)
 
                 if store_key is not None:
-                    self.process_key_values(
+                    self.process_key_values_store(
                         location_path,
                         store_key
                     )
 
-    def process_key_values(self, location_path, key):
+    def process_key_values_store(self, location_path, key):
         """Iterate values of the given key.
         """
         key_values = iter(key.values())
