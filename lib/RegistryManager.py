@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 import logging
 from yarp import Registry
 from yarp import RegistrySqlite
@@ -39,7 +40,8 @@ class RegistryHandler(object):
         logging.debug(u"[starting] Processing: {} and logfiles.".format(self.orig_filename))
 
         # Insure temp dir
-        os.makedirs(self.temp_dir, exist_ok=True)
+        if not os.path.isdir(self.temp_dir):
+            os.makedirs(self.temp_dir)
 
         # extract main hive
         export_file_io = open(self.primary_registry, 'wb')
@@ -50,31 +52,46 @@ class RegistryHandler(object):
             match = re.search('^{}[.](LOG\d?)$'.format(self.registry_name), key, flags=re.I)
             if match:
                 filename = match.group(0)
+
+                if mapping[key]['attribute'].id is None:
+                    continue
+
                 export_fullpath = os.path.join(self.temp_dir, filename)
                 export_file_io = open(export_fullpath, 'wb')
 
                 # Extract the source file to the temp file
-                extract_tsk_file_temp(mapping[key], export_file_io)
+                extract_tsk_file_temp(
+                    mapping[key], export_file_io
+                )
 
                 log = match.group(1)
                 self.log_files[log] = export_fullpath
 
-        hive = RegistrySqlite.YarpDB(
-            self.primary_registry,
-            self.sqlite_hive
-        )
-        hive.close()
+        # We are not currently using YarpDB, will do SQLite init once utilized
+        # if sys.version_info > (3, 0):
+        #     hive = RegistrySqlite.YarpDB(
+        #         self.primary_registry,
+        #         self.sqlite_hive
+        #     )
+        #     hive.close()
 
         logging.debug(u"[finished] Processing: {}".format(self.orig_filename))
 
     def get_sqlite_hive(self):
-        hive = RegistrySqlite.YarpDB(
-            None,
-            self.sqlite_hive
-        )
-        return hive
+        """Get the YarpDB class of a hive.
+        """
+        # Not currently used
+
+        # hive = RegistrySqlite.YarpDB(
+        #     None,
+        #     self.sqlite_hive
+        # )
+        # return hive
+        pass
 
     def get_hive(self):
+        """Get the RegistryHive for this handler.
+        """
         hive = Registry.RegistryHive(
             open(self.primary_registry, 'rb')
         )

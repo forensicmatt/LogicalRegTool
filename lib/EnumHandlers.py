@@ -21,6 +21,33 @@ def get_temp_dir(temp_base, registry, inode, user=None):
     return temp_dir
 
 
+class ExtractionAttribute(object):
+    def __init__(self, tsk_file, fullname=None):
+        """Sometimes a file might not have a data attribute. This way we know if a file has a data attribute accessible.
+        """
+        self.id = None
+        self.type = None
+        self.size = None
+        self.attribute_name = None
+
+        ntfs_attr_found = False
+
+        for attr in tsk_file:
+            if attr.info.type == pytsk3.TSK_FS_ATTR_TYPE_NTFS_DATA:
+                ntfs_attr_found = True
+                self.id = attr.info.id
+                self.type = attr.info.type
+                self.size = attr.info.size
+                self.attribute_name = attr.info.name
+                break
+
+        if not ntfs_attr_found:
+            name = tsk_file.info.name.name
+            if fullname:
+                name = fullname
+            logging.warn(u"No TSK_FS_ATTR_TYPE_NTFS_DATA attribute found for {}".format(name))
+
+
 class LogicalEnumerator(object):
     """A class to process the logical volume."""
     def __init__(self, temp_dir, img_info, registry_manager):
@@ -87,10 +114,14 @@ class LogicalEnumerator(object):
                 for tsk_file in ntuser_dir:
                     filename = tsk_file.info.name.name.decode(u"utf-8")
                     logging.debug(u"Filename: {}".format(filename))
+                    fullname = u"/".join([ntuser_path, filename])
+
                     dir_mapping[filename] = {
-                        'fullname': u"/".join([ntuser_path, filename]),
+                        'fullname': u"/".join([ntuser_path, fullname]),
                         'tsk_file': tsk_file,
-                        'file_io': TskFileIo(tsk_file)
+                        'attribute': ExtractionAttribute(
+                            tsk_file, fullname=fullname
+                        )
                     }
 
                 for key in dir_mapping.keys():
@@ -129,10 +160,14 @@ class LogicalEnumerator(object):
                 for tsk_file in usrclass_dir:
                     filename = tsk_file.info.name.name.decode(u"utf-8")
                     logging.debug(u"Filename: {}".format(filename))
+                    fullname = u"/".join([usrclass_path, filename])
+
                     dir_mapping[filename] = {
-                        'fullname': u"/".join([usrclass_path, filename]),
+                        'fullname': fullname,
                         'tsk_file': tsk_file,
-                        'file_io': TskFileIo(tsk_file)
+                        'attribute': ExtractionAttribute(
+                            tsk_file, fullname=fullname
+                        )
                     }
 
                 for key in dir_mapping.keys():
@@ -166,9 +201,14 @@ class LogicalEnumerator(object):
         for tsk_file in system_config_dir:
             filename = tsk_file.info.name.name.decode(u"utf-8")
             logging.debug(u"Filename: {}".format(filename))
+            fullname = u"/".join([u"./Windows/System32/config", filename])
+
             dir_mapping[filename] = {
-                'fullname': u"/".join([u"./Windows/System32/config", filename]),
-                'tsk_file': tsk_file
+                'fullname': fullname,
+                'tsk_file': tsk_file,
+                'attribute': ExtractionAttribute(
+                    tsk_file, fullname=fullname
+                )
             }
 
         for key in dir_mapping.keys():
