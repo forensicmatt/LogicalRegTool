@@ -6,6 +6,36 @@ from lib.JsonDecoder import ComplexEncoder
 from lib.Helpers import get_datetime_64
 
 
+# Resources:
+# https://www.magnetforensics.com/computer-forensics/how-to-analyze-usb-device-history-in-windows/
+
+
+def get_parts_from_usb_string(usb_str):
+    # Examples:
+    # _??_USBSTOR#Disk&Ven_Flash&Prod_Drive_SM_USB20&Rev_1100#AA04012700013494&0#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}
+    # {8dfc9df3-376f-11e3-be88-24fd52566ede}#0000000000100000
+
+    # Attempt to parse key parts
+    record = OrderedDict([])
+
+    parts = usb_str.split("#")
+    if len(parts) == 4:
+        record["raw"] = usb_str
+        record["type"] = parts[0]
+        record["desc"] = parts[1]
+        record["serial"] = parts[2]
+        record["guid"] = parts[3]
+    elif len(parts) == 2:
+        record["raw"] = usb_str
+        record["guid"] = parts[0]
+        record["serial"] = parts[1]
+    else:
+        record["raw"] = usb_str
+        logging.info("get_parts_from_usb_string() - Unknown parts parsing: {}".format(usb_str))
+
+    return record
+
+
 class UsbEnumerator(object):
     def __init__(self):
         pass
@@ -13,13 +43,23 @@ class UsbEnumerator(object):
     def run(self, registry_manager):
         # Get the registry handler for the SYSTEM hive
         handler = registry_manager.get_handler(u'SYSTEM')
+        self._handle_system_hive(handler)
 
+    def _handle_system_hive(self, handler):
         # Get the helper class for the SYSTEM handler
         system_helper = handler.get_helper()
         # Get the current control path
         current_control_path = system_helper.get_current_control_set_path()
 
         hive = handler.get_hive()
+        mounted_devices_path = u"MountedDevices"
+        mounted_devices_key = hive.find_key(mounted_devices_path)
+        self._mounted_devices(mounted_devices_key)
+
+        wpdbusenum_path = u"\\".join([current_control_path, u"Enum\\SWD\\WPDBUSENUM"])
+        wpdbusenum_key = hive.find_key(wpdbusenum_path)
+        self._parse_wpdbusenum(wpdbusenum_key)
+
         usbstore_path = u"\\".join([current_control_path, u"Enum\\USBSTOR"])
         usbstore_key = hive.find_key(usbstore_path)
         self._parse_usbstor(usbstore_key)
@@ -27,6 +67,56 @@ class UsbEnumerator(object):
         usb_path = u"\\".join([current_control_path, u"Enum\\USB"])
         usb_key = hive.find_key(usb_path)
         self._parse_usb(usb_key)
+
+    def _mounted_devices(self, mounted_devices_key):
+        # MountedDevices
+
+        record = OrderedDict([
+            ("_plugin", "UsbEnumerator.MountedDevices"),
+            ("MountedDevices", OrderedDict([]))
+        ])
+        for item in mounted_devices_key.values():
+            value_name = item.name()
+            value_data = item.data()
+
+            if value_data.startswith(b"_\x00?\x00?\x00") or value_data.startswith(b"\\\x00?\x00?\x00"):
+                value_data = get_parts_from_usb_string(value_data.decode('utf-16le'))
+            else:
+                value_data = value_data.hex()
+
+            record["MountedDevices"][value_name] = value_data
+
+        print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
+
+    def _parse_wpdbusenum(self, wpdbusenum_key):
+        # ControlSet001\Enum\SWD\WPDBUSENUM
+        for item_key in wpdbusenum_key.subkeys():
+            item_name = item_key.name()
+
+            record = OrderedDict([
+                ("_plugin", "UsbEnumerator.WPDBUSENUM")
+            ])
+
+            # Attempt to parse key parts
+            name_parts = get_parts_from_usb_string(item_name)
+
+            record['name'] = item_name
+            record['name_parts'] = name_parts
+            record['capabilities'] = item_key.value(name='Capabilities').data()
+            record['container_id'] = item_key.value(name='ContainerID').data().strip("\x00")
+            cids = []
+            for cid in item_key.value(name='CompatibleIDs').data():
+                cids.append(cid.strip("\x00"))
+            record['container_ids'] = cids
+            record['config_flags'] = item_key.value(name='ConfigFlags').data()
+            record['class_guid'] = item_key.value(name='ClassGUID').data().strip("\x00")
+            record['driver'] = item_key.value(name='Driver').data().strip("\x00")
+            record['mfg'] = item_key.value(name='Mfg').data().strip("\x00")
+            record['service'] = item_key.value(name='Service').data().strip("\x00")
+            record['device_desc'] = item_key.value(name='DeviceDesc').data().strip("\x00")
+            record['friendly_name'] = item_key.value(name='FriendlyName').data().strip("\x00")
+
+            print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
 
     def _parse_usb(self, usb_key):
         for vid_pid_key in usb_key.subkeys():
@@ -42,7 +132,7 @@ class UsbEnumerator(object):
                 attributes[attr_name.lower()] = attr_value
 
             record = OrderedDict([
-                ("plugin", u"UsbEnumerator"),
+                ("_plugin", "UsbEnumerator.USB")
             ])
             record["USB"] = attributes
 
@@ -107,7 +197,7 @@ class UsbEnumerator(object):
                                 )
 
                 record = OrderedDict([
-                    ("plugin", u"UsbEnumerator"),
+                    ("_plugin", "UsbEnumerator.USBSTOR"),
                     ("device_id", usbstore_device_name),
                     ("serial_number", serial_number_str),
                     ("friendly_name", friendly_name),
