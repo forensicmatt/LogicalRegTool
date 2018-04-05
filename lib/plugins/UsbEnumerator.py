@@ -1,4 +1,3 @@
-import ujson
 import json
 import logging
 from collections import OrderedDict
@@ -17,20 +16,18 @@ def get_parts_from_usb_string(usb_str):
 
     # Attempt to parse key parts
     record = OrderedDict([])
+    record["raw"] = usb_str
 
     parts = usb_str.split("#")
     if len(parts) == 4:
-        record["raw"] = usb_str
         record["type"] = parts[0]
         record["desc"] = parts[1]
         record["serial"] = parts[2]
         record["guid"] = parts[3]
     elif len(parts) == 2:
-        record["raw"] = usb_str
         record["guid"] = parts[0]
         record["serial"] = parts[1]
     else:
-        record["raw"] = usb_str
         logging.info("get_parts_from_usb_string() - Unknown parts parsing: {}".format(usb_str))
 
     return record
@@ -56,6 +53,10 @@ class UsbEnumerator(object):
         mounted_devices_key = hive.find_key(mounted_devices_path)
         self._mounted_devices(mounted_devices_key)
 
+        device_migration_path = u"\\".join([current_control_path, u"Control\\DeviceMigration\\Classes\\{4d36e967-e325-11ce-bfc1-08002be10318}"])
+        device_migration_key = hive.find_key(device_migration_path)
+        self._device_migration(device_migration_key)
+
         wpdbusenum_path = u"\\".join([current_control_path, u"Enum\\SWD\\WPDBUSENUM"])
         wpdbusenum_key = hive.find_key(wpdbusenum_path)
         self._parse_wpdbusenum(wpdbusenum_key)
@@ -68,28 +69,49 @@ class UsbEnumerator(object):
         usb_key = hive.find_key(usb_path)
         self._parse_usb(usb_key)
 
-    def _mounted_devices(self, mounted_devices_key):
-        # MountedDevices
+    def _device_migration(self, device_migration_key):
+        for item in device_migration_key.values():
+            value_name = item.name()
 
-        record = OrderedDict([
-            ("_plugin", "UsbEnumerator.MountedDevices"),
-            ("MountedDevices", OrderedDict([]))
-        ])
+            device_parts = value_name.split("\\")
+            device = OrderedDict([
+                ("name", value_name)
+            ])
+
+            if len(device_parts) == 3:
+                device['type'] = device_parts[0]
+                device['desc'] = device_parts[1]
+                device['serial'] = device_parts[2]
+
+            record = OrderedDict([
+                ("_plugin", "UsbEnumerator.DeviceMigration"),
+                ("guid", "{4d36e967-e325-11ce-bfc1-08002be10318}"),
+                ("device", device)
+            ])
+
+            print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
+
+    def _mounted_devices(self, mounted_devices_key):
         for item in mounted_devices_key.values():
+            record = OrderedDict([
+                ("_plugin", "UsbEnumerator.MountedDevices")
+            ])
+
             value_name = item.name()
             value_data = item.data()
 
+            record["mount"] = value_name
+
             if value_data.startswith(b"_\x00?\x00?\x00") or value_data.startswith(b"\\\x00?\x00?\x00"):
                 value_data = get_parts_from_usb_string(value_data.decode('utf-16le'))
+                record["device"] = value_data
             else:
                 value_data = value_data.hex()
+                record["raw"] = value_data
 
-            record["MountedDevices"][value_name] = value_data
-
-        print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
+            print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
 
     def _parse_wpdbusenum(self, wpdbusenum_key):
-        # ControlSet001\Enum\SWD\WPDBUSENUM
         for item_key in wpdbusenum_key.subkeys():
             item_name = item_key.name()
 
