@@ -3,12 +3,14 @@ from lib.plugins.UsbEnumerator import UsbEnumerator
 from lib.plugins.UserAssist import UserAssist
 from lib.plugins.AppCompat import AppCompact
 from lib.plugins.Bam import Bam
+from lib.plugins.ClassEnumerator import ClassEnumerator
 
 PLUGIN_MAPPING = {
     'UserAssist': UserAssist(),
     'AppCompact': AppCompact(),
     'Bam': Bam(),
     'UsbEnumerator': UsbEnumerator(),
+    'ClassEnumerator': ClassEnumerator(),
     # 'RegistryIterator': RegistryIterator()
 }
 
@@ -16,7 +18,8 @@ ALL_PLUGINS = [
     'UserAssist',
     'AppCompact',
     'Bam',
-    'UsbEnumerator'
+    'UsbEnumerator',
+    'ClassEnumerator'
 ]
 
 

@@ -2,6 +2,7 @@ import re
 import os
 import sys
 import logging
+import collections
 from yarp import Registry
 from yarp import RegistrySqlite
 from lib.Helpers import extract_tsk_file_temp
@@ -20,6 +21,39 @@ class SystemHelper(object):
             return current_path
         else:
             raise Exception(u"Cannot find 'Select' key in SOFTWARE hive.")
+
+    def get_class_mapping(self):
+        current_control_path = self.get_current_control_set_path()
+
+        hive = self._handler.get_hive()
+        class_path = u"\\".join([current_control_path, u"Control\\Class"])
+        class_key = hive.find_key(class_path)
+
+        mapping = collections.OrderedDict([])
+
+        for class_item in class_key.subkeys():
+            class_key_name = class_item.name()
+            mapping[class_key_name] = collections.OrderedDict([])
+
+            for value_key in class_item.values():
+                name = value_key.name()
+                data = value_key.data()
+
+                if isinstance(data, bytes):
+                    data = data.strip(b"\x00")
+                elif isinstance(data, str):
+                    data = data.strip("\x00")
+                elif isinstance(data, list):
+                    new_data = []
+                    for item in data:
+                        new_value = item.strip("\x00")
+                        if new_value:
+                            new_data.append(new_value)
+                    data = new_data
+
+                mapping[class_key_name][name] = data
+
+        return mapping
 
 
 class RegistryHandler(object):

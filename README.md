@@ -26,4 +26,5 @@ optional arguments:
 | RegistryIterater | Iterate Keys and Values | In Development | No |
 | UsbEnumerator | Enumerate USB Devices | In Development | No |
 | UserAssist | Parse UserAssist | Complete | No |
+| ClassEnumerator | Parse Control Classes | Complete | No |
 
