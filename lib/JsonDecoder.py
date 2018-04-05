@@ -9,6 +9,8 @@ class ComplexEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime.datetime):
             return DATETIME_FORMAT.format(obj)
+        if isinstance(obj, bytes):
+            return obj.decode('ascii', 'ignore')
         return json.JSONEncoder.default(
             self, obj
         )
