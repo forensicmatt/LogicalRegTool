@@ -64,6 +64,7 @@ class RegistryHandler(object):
         self.temp_dir = temp_dir
         self.sqlite_hive = os.path.join(self.temp_dir, u"{}.db".format(self.registry_name))
         self.primary_registry = os.path.join(self.temp_dir, name_key)
+        self.hive = None
 
         self.log_files = {
             u'LOG': None,
@@ -126,36 +127,37 @@ class RegistryHandler(object):
     def get_hive(self):
         """Get the RegistryHive for this handler.
         """
-        hive = Registry.RegistryHive(
-            open(self.primary_registry, 'rb')
-        )
-
-        try:
-            if self.log_files[u'LOG']:
-                log_1 = open(self.log_files[u'LOG'], 'rb')
-            else:
-                log_1 = None
-
-            if self.log_files[u'LOG1']:
-                log_2 = open(self.log_files[u'LOG1'], 'rb')
-            else:
-                log_2 = None
-
-            if self.log_files[u'LOG2']:
-                log_3 = open(self.log_files[u'LOG2'], 'rb')
-            else:
-                log_3 = None
-
-            recovery_result = hive.recover_auto(
-                log_1,
-                log_2,
-                log_3
+        if not self.hive:
+            self.hive = Registry.RegistryHive(
+                open(self.primary_registry, 'rb')
             )
-            logging.info(u"Recovery Results: {}".format(recovery_result))
-        except Exception as error:
-            logging.error(u"{}".format(error))
 
-        return hive
+            try:
+                if self.log_files[u'LOG']:
+                    log_1 = open(self.log_files[u'LOG'], 'rb')
+                else:
+                    log_1 = None
+
+                if self.log_files[u'LOG1']:
+                    log_2 = open(self.log_files[u'LOG1'], 'rb')
+                else:
+                    log_2 = None
+
+                if self.log_files[u'LOG2']:
+                    log_3 = open(self.log_files[u'LOG2'], 'rb')
+                else:
+                    log_3 = None
+
+                recovery_result = self.hive.recover_auto(
+                    log_1,
+                    log_2,
+                    log_3
+                )
+                logging.info(u"Recovery Results: {}".format(recovery_result))
+            except Exception as error:
+                logging.error(u"{}".format(error))
+
+        return self.hive
 
     def get_helper(self):
         if self.registry_name.upper() == u"SYSTEM":
