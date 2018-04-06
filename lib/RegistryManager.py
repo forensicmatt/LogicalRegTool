@@ -8,6 +8,29 @@ from yarp import RegistrySqlite
 from lib.Helpers import extract_tsk_file_temp
 
 
+def enumerate_registry_value(value_data):
+    """"""
+    if isinstance(value_data, str):
+        value_data = value_data.strip("\x00")
+    elif isinstance(value_data, bytes):
+        value_data = value_data.strip(b"\x00")
+    elif isinstance(value_data, list):
+        new_list = []
+        for item_value in value_data:
+            if isinstance(item_value, str):
+                item_value = item_value.strip("\x00")
+            elif isinstance(item_value, bytes):
+                item_value = item_value.strip(b"\x00")
+
+            if item_value:
+                new_list.append(
+                    item_value
+                )
+        value_data = new_list
+
+    return value_data
+
+
 class SystemHelper(object):
     def __init__(self, handler):
         self._handler = handler
