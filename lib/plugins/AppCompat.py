@@ -60,7 +60,7 @@ class AppCompact(object):
             )
 
             record = OrderedDict([
-                ("plugin", u"AppCompat"),
+                ("_plugin", u"AppCompat"),
                 ("name", value_name),
                 ("timestamp", timestamp),
                 ("path", location_path),
@@ -88,7 +88,7 @@ class AppCompact(object):
                 )
 
             record = OrderedDict([
-                ("plugin", u"AppCompat"),
+                ("_plugin", u"AppCompat"),
                 ("name", value_name),
                 ("timestamp", timestamp),
                 ("path", location_path),

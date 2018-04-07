@@ -33,7 +33,7 @@ class UserAssist(object):
                                 count = struct.unpack("<I", value_data[4:8])[0]
 
                             record = OrderedDict([
-                                ("plugin", u"UserAssist"),
+                                ("_plugin", u"UserAssist"),
                                 ("guid", guid_key_name),
                                 ("name", value_name_decoded),
                                 ("count", count)

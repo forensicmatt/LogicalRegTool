@@ -55,7 +55,7 @@ class Bam(object):
                         timestamp = get_datetime_64(value_data[0:8])
 
                         record = OrderedDict([
-                            ("plugin", u"Bam"),
+                            ("_plugin", u"Bam"),
                             ("name", value_name),
                             ("timestamp", timestamp),
                             ("sid", sid_name),
