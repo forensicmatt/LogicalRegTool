@@ -1,3 +1,4 @@
+import re
 import json
 import logging
 from collections import OrderedDict
@@ -5,18 +6,41 @@ from lib.JsonDecoder import ComplexEncoder
 from lib.Helpers import get_datetime_64
 from lib.RegistryManager import enumerate_registry_value
 
+RE_VOLUME_ENDING = re.compile("^\{[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}\}(.*)_(\d{1,})$")
+
 # Resources:
 # https://www.magnetforensics.com/computer-forensics/how-to-analyze-usb-device-history-in-windows/
+
+
+def format_volume_serial(serial_int):
+    """Format the volume serial number as a string.
+
+    Args:
+        serial_int (long|int): The integer representing the volume serial number
+    Returns:
+        (str): The string representation xxxx-xxxx
+    """
+    serial_str = None
+
+    if serial_int == 0:
+        return serial_str
+
+    if serial_int is not None:
+        serial_str = hex(serial_int)[2:-1].zfill(8)
+        serial_str = serial_str[:4] + '-' + serial_str[4:]
+
+    return serial_str
 
 
 def get_parts_from_usb_string(usb_str):
     # Examples:
     # _??_USBSTOR#Disk&Ven_Flash&Prod_Drive_SM_USB20&Rev_1100#AA04012700013494&0#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}
+    # _??_USBSTOR#Disk&Ven_Flash&Prod_Drive_SM_USB20&Rev_1100#AA04012700013494&0#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}PHOTOS BACK_1141839789
     # {8dfc9df3-376f-11e3-be88-24fd52566ede}#0000000000100000
 
     # Attempt to parse key parts
     record = OrderedDict([])
-    record["raw"] = usb_str
+    record["name"] = usb_str
 
     parts = usb_str.split("#")
     if len(parts) == 4:
@@ -24,6 +48,14 @@ def get_parts_from_usb_string(usb_str):
         record["desc"] = parts[1]
         record["serial"] = parts[2]
         record["guid"] = parts[3]
+
+        volume_ending = RE_VOLUME_ENDING.match(
+            record["guid"]
+        )
+        if volume_ending:
+            record["volume_label"] = volume_ending.group(1)
+            record["volume_serial"] = format_volume_serial(int(volume_ending.group(2)))
+            record["volume_serial_int"] = volume_ending.group(2)
     elif len(parts) == 2:
         record["guid"] = parts[0]
         record["serial"] = parts[1]
@@ -192,8 +224,36 @@ class UsbEnumerator(object):
 
     def run(self, registry_manager):
         # Get the registry handler for the SYSTEM hive
-        handler = registry_manager.get_handler(u'SYSTEM')
-        self._handle_system_hive(handler)
+        system_handler = registry_manager.get_handler(u'SYSTEM')
+        self._handle_system_hive(system_handler)
+
+        software_handler = registry_manager.get_handler(u'SOFTWARE')
+        self._handle_software_hive(software_handler)
+
+    def _handle_software_hive(self, handler):
+        hive = handler.get_hive()
+        emd_path = "Microsoft\\Windows NT\\CurrentVersion\\EMDMgmt"
+        emd_key = hive.find_key(emd_path)
+        if emd_key:
+            for device_item in emd_key.subkeys():
+                record = OrderedDict([
+                    ("_plugin", "UsbEnumerator.EMDMgmt"),
+                ])
+
+                device_name = device_item.name()
+                if device_name.startswith("_??_USBSTOR"):
+                    record['device'] = get_parts_from_usb_string(
+                        device_name
+                    )
+                else:
+                    record['device'] = OrderedDict([])
+                    record['device']['name'] = device_name
+                    record['device']['volume_serial'] = format_volume_serial(
+                        int(device_name.rsplit('_', 1)[1])
+                    )
+                    record['device']['volume_serial_int'] = device_name.rsplit('_', 1)[1]
+
+                print(u"{}".format(json.dumps(record, cls=ComplexEncoder)))
 
     def _handle_system_hive(self, handler):
         # Get the helper class for the SYSTEM handler
@@ -204,11 +264,13 @@ class UsbEnumerator(object):
         hive = handler.get_hive()
         mounted_devices_path = u"MountedDevices"
         mounted_devices_key = hive.find_key(mounted_devices_path)
-        self._mounted_devices(mounted_devices_key)
+        if mounted_devices_key:
+            self._mounted_devices(mounted_devices_key)
 
         device_migration_path = u"\\".join([current_control_path, u"Control\\DeviceMigration\\Classes\\{4d36e967-e325-11ce-bfc1-08002be10318}"])
         device_migration_key = hive.find_key(device_migration_path)
-        self._device_migration(device_migration_key)
+        if device_migration_key:
+            self._device_migration(device_migration_key)
 
         enum_base_path = u"\\".join([current_control_path, u"Enum"])
         enum_parser = EumParser(
@@ -255,7 +317,9 @@ class UsbEnumerator(object):
             record["mount"] = value_name
 
             if value_data.startswith(b"_\x00?\x00?\x00") or value_data.startswith(b"\\\x00?\x00?\x00"):
-                value_data = get_parts_from_usb_string(value_data.decode('utf-16le'))
+                value_data = get_parts_from_usb_string(
+                    value_data.decode('utf-16le')
+                )
                 record["device"] = value_data
             else:
                 value_data = value_data.hex()
@@ -279,19 +343,23 @@ class EumParser(object):
 
         scsi_path = u"\\".join([self.base_location, u"SCSI"])
         scsi_key = hive.find_key(scsi_path)
-        self._parse_scsi(scsi_key)
+        if scsi_key:
+            self._parse_scsi(scsi_key)
 
         wpdbusenum_path = u"\\".join([self.base_location, u"SWD\\WPDBUSENUM"])
         wpdbusenum_key = hive.find_key(wpdbusenum_path)
-        self._parse_wpdbusenum(wpdbusenum_key)
+        if wpdbusenum_key:
+            self._parse_wpdbusenum(wpdbusenum_key)
 
         usbstore_path = u"\\".join([self.base_location, u"USBSTOR"])
         usbstore_key = hive.find_key(usbstore_path)
-        self._parse_usbstor(usbstore_key)
+        if usbstore_key:
+            self._parse_usbstor(usbstore_key)
 
         usb_path = u"\\".join([self.base_location, u"USB"])
         usb_key = hive.find_key(usb_path)
-        self._parse_usb(usb_key)
+        if usb_key:
+            self._parse_usb(usb_key)
 
     def _parse_scsi(self, scsi_key):
         for device_item in scsi_key.subkeys():
